@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # stdlib-only repo: every security-supported line gets exercised.
+        # scripts/check_runtimes.py fails the build if a line goes EOL.
+        python-version: [ "3.11", "3.12", "3.13", "3.14" ]
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Check the matrix versions are still supported
+      run: python3 scripts/check_runtimes.py
+
+    - name: Use Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install test runner
+      run: pip install pytest
+
+    - name: Run tests
+      run: python -m pytest tests/ -q
+
+    - name: Fleet summary still derives from committed data
+      run: python3 scripts/analyze_fleet.py data/fleet_runs.jsonl

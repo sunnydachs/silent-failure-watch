@@ -1,11 +1,14 @@
 # silent-failure-watch
 
+English | [日本語](README.ja.md)
+
 Evidence repo for the article series on **false success in unattended agent
 pipelines**: agents that report a job as done when the artifact, the data, or
 the run itself never happened.
 
 Two datasets live here, both measured on a real single-machine agent fleet
-(a WSL2 laptop running cron-driven agents, ~1,000 tracked executions):
+(a WSL2 laptop running cron-driven agents, 1,000 tracked executions,
+exported 2026-10-24):
 
 1. `data/fleet_runs.jsonl` — sanitized export of 1,000 real cron executions
    (status, generic job type, error class, duration, schedule lateness).
@@ -67,3 +70,13 @@ default; traces in `results/` record the exact model and parameters used.
   harness controls. That is the point (a cheap state check beats a
   self-report), but it means the verifier column is a demonstration, not a
   benchmark score.
+
+## Contributing
+
+Issue reports with reproduction steps are welcome — especially additional
+failure classes for the injection grid. A PR adding a condition should add
+its ground-truth entry and a parser test alongside it.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
