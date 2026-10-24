@@ -34,7 +34,7 @@ it a five-line state check catches that the agent's own status field does not.
 | `scripts/job_type_map.example.json` | shape of the site-specific job-type mapping |
 | `experiments/inject/run_grid.py` | the controlled false-success grid |
 | `tests/` | unit tests for the classifier and the verdict parser |
-| `results/` | raw run records of the grid as executed (model names live here, in trace metadata only) |
+| `results/` | raw run records of the grid as executed (the subject model is deliberately unnamed — see limits) |
 
 ## Running
 
@@ -70,6 +70,9 @@ default; traces in `results/` record the exact model and parameters used.
   harness controls. That is the point (a cheap state check beats a
   self-report), but it means the verifier column is a demonstration, not a
   benchmark score.
+- The grid's subject model is deliberately unnamed — nowhere in the repo,
+  traces included. Rerun the grid against any OpenAI-compatible chat model
+  to test your own.
 
 ## Contributing
 
