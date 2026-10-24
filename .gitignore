@@ -1,0 +1,5 @@
+# site-specific, not committed
+scripts/job_type_map.json
+__pycache__/
+*.pyc
+.venv/

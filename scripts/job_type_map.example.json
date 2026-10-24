@@ -1,0 +1,8 @@
+{
+  "_comment": "Shape of the site-specific mapping (the real file is NOT committed). Keys are opaque job ids from the private cron ledger; values are generic job types used in the public export.",
+  "<opaque-job-id-1>": "video-generation",
+  "<opaque-job-id-2>": "data-pipeline",
+  "<opaque-job-id-3>": "social-posting",
+  "<opaque-job-id-4>": "language-learning",
+  "<opaque-job-id-5>": "content-digest"
+}
