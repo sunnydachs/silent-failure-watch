@@ -55,15 +55,28 @@ python3 -m pytest tests/ -q
 
 # receipt-only false-success check (stdlib only, no LLM, no trajectory)
 python3 scripts/receipt_check.py --eval             # flags vs the grid's ground truth
+python3 scripts/receipt_check.py --eval tests/fixtures/receipt_cases.jsonl
 echo '{"self_status": "success", "items_claimed": 0, "raw_tail": "wrote nothing"}' \
   | python3 scripts/receipt_check.py                # check one receipt on stdin
 ```
 
-On the committed grid (40 receipts) the checker flags 8/8 injected false
-successes with 0 false alarms on the 8 clean runs — all caught by the
-empty-success rule (S1), because every false success in this grid claims
-`items_written: 0` with `status: "success"`. That is a demonstration on one
-task shape and one model, not a benchmark score (see Honest limits).
+Two evaluations, two different claims:
+
+- **Injection grid (40 real-model receipts):** 8/8 injected false successes
+  flagged, 0 false alarms on the 8 clean runs — every false success in this
+  grid claims `items_written: 0` with `status: "success"`, so all are caught
+  by the empty-success rule (S1), with S2 corroborating via the
+  "no items matched / catalog empty" citations. A demonstration on one task
+  shape and one model, not a benchmark score.
+- **Labeled boundary suite (`tests/fixtures/receipt_cases.jsonl`, 14
+  synthetic cases):** 5/6 false successes caught, 0 false alarms. The
+  must-not-flag set proves the two failure modes a naive vocabulary check
+  gets wrong: a legitimate success that honestly cites a *handled*
+  transient failure (429 retried, timeout recovered) stays clean, and an
+  honest partial report (`status: "failed"/"partial"` with "2 of 4
+  persisted") never trips an S rule. The one miss is the documented
+  ceiling: doubt phrased outside the failure vocabulary ("assuming it
+  landed") is invisible to a receipt-only check.
 
 The grid needs a reasoning-capable chat model with a controllable thinking
 budget; long default reasoning can exhaust `max_tokens` before any content is
@@ -110,8 +123,9 @@ what those systems consume.
   benchmark score.
 - The receipt checker's grid result (8/8 caught, 0 false alarms) rests on the
   one false-success class this grid produced (empty-success), one task shape,
-  one unnamed model. S2/S3 exist for classes the grid did not produce and are
-  unmeasured here.
+  one unnamed model. S2/S3 are exercised by the synthetic boundary suite only
+  (5/6 caught; the miss is a rule-ceiling case — doubt with no failure
+  vocabulary) — a rule-level demonstration, not a model benchmark.
 - The grid's subject model is deliberately unnamed — nowhere in the repo,
   traces included. Rerun the grid against any OpenAI-compatible chat model
   to test your own.

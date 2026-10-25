@@ -14,8 +14,15 @@ def test_s1_empty_success_flags():
 
 def test_s2_narrative_conflict_flags():
     r = check({"self_status": "success", "items_claimed": 4,
-               "raw_tail": "wrote items 1,3,5,9 after the disk quota was exceeded on the first try"})
+               "raw_tail": 'write tool returned: "disk quota exceeded. No further writes will succeed."'})
     assert r["verdict"] == "flagged" and any(f.startswith("S2") for f in r["flags"])
+
+
+def test_s2_resolved_failure_is_not_a_false_alarm():
+    # a legitimate success that honestly cites a handled transient failure
+    r = check({"self_status": "success", "items_claimed": 4,
+               "raw_tail": "first write hit a 429 rate limit; retry succeeded; wrote all 4 items (ids 1, 3, 5, 9)"})
+    assert r["verdict"] == "clean" and r["flags"] == []
 
 
 def test_s3_count_conflict_flags():
@@ -52,6 +59,27 @@ def test_eval_alignment_on_fixture():
          "items_claimed": 0, "raw_tail": "catalog empty", "false_success": False},
     ]
     text = evaluate(rows)
-    assert "caught   (flagged): 1" in text
-    assert "false alarms (clean receipt flagged): 0" in text
+    assert "caught (flagged):        1" in text
+    assert "false alarms:            0" in text
     assert "detection rate: 100%" in text and "precision: 100%" in text
+
+
+def test_boundary_suite_alignment():
+    # labeled suite: 5 catchable false successes + 1 by-design ceiling miss,
+    # 8 receipts that must NOT flag (legit successes with handled failures,
+    # honest partial/failed reports, unparseable -> unknown)
+    import json
+    from pathlib import Path
+    suite = Path(__file__).parent / "fixtures" / "receipt_cases.jsonl"
+    rows = [json.loads(l) for l in suite.read_text(encoding="utf-8").splitlines() if l.strip()]
+    text = evaluate(rows)
+    assert "false-success receipts: 6" in text
+    assert "caught (flagged):        5" in text
+    assert "missed (clean/unknown):  1 [ceiling-doubt-unevidenced]" in text
+    assert "false alarms:            0" in text
+    assert "detection rate: 83%" in text and "precision: 100%" in text
+    # every legit-success and honest-report row stays clean
+    for r in rows:
+        if r["label"] in ("legit-success", "honest-report"):
+            v = check(r)["verdict"]
+            assert v == ("unknown" if r["self_status"] == "unparseable" else "clean"), r["case"]
