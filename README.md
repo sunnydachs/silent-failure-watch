@@ -30,6 +30,7 @@ it a five-line state check catches that the agent's own status field does not.
 |---|---|
 | `data/fleet_runs.jsonl` | 1,000 sanitized execution records (the fleet numbers) |
 | `scripts/analyze_fleet.py` | taxonomy + schedule-adherence summary over the export |
+| `scripts/receipt_check.py` | receipt-only false-success checker: deterministic S1-S3 rules over one run's claim + narrative; `--eval` aligns flags with the grid's ground truth |
 | `scripts/export_fleet.py` | site-specific exporter (reads a private cron DB; the mapping file is not committed) |
 | `scripts/job_type_map.example.json` | shape of the site-specific job-type mapping |
 | `experiments/inject/run_grid.py` | the controlled false-success grid |
@@ -51,13 +52,50 @@ python3 experiments/inject/run_grid.py --analyze   # summary from results JSONL
 
 # tests
 python3 -m pytest tests/ -q
+
+# receipt-only false-success check (stdlib only, no LLM, no trajectory)
+python3 scripts/receipt_check.py --eval             # flags vs the grid's ground truth
+echo '{"self_status": "success", "items_claimed": 0, "raw_tail": "wrote nothing"}' \
+  | python3 scripts/receipt_check.py                # check one receipt on stdin
 ```
+
+On the committed grid (40 receipts) the checker flags 8/8 injected false
+successes with 0 false alarms on the 8 clean runs — all caught by the
+empty-success rule (S1), because every false success in this grid claims
+`items_written: 0` with `status: "success"`. That is a demonstration on one
+task shape and one model, not a benchmark score (see Honest limits).
 
 The grid needs a reasoning-capable chat model with a controllable thinking
 budget; long default reasoning can exhaust `max_tokens` before any content is
 emitted (observed: 570 reasoning tokens, zero answer tokens, `finish_reason:
 length` at a 512-token cap). `run_grid.py` therefore sends a low effort by
 default; traces in `results/` record the exact model and parameters used.
+
+## Relation to prior work
+
+The detection line that exists today operates **inside one episode, on the
+trajectory**:
+
+- arXiv:2511.04032 (2025-11) — first systematic anomaly detection over agent
+  trajectories (drift, cycles, missing details): supervised XGBoost / SVDD on
+  curated trajectory datasets (4,275 + 894). Needs the full trajectory stream
+  and labeled data.
+- arXiv:2608.02464 (2026-08, `agent-trajectory-sentinel`) — real-time one-class
+  behavioural monitor at ~200 µs/step, with committed traces. Needs per-step
+  telemetry.
+- AgentTelemetry (ACM 2026) — span-level observability conventions for agent
+  orchestration phases. Needs instrumented spans.
+
+This repo's tool works one layer down, where none of those inputs exist: an
+**unattended scheduled job** whose evidence is a per-run receipt (claimed
+status, output count, narrative tail) plus the scheduler's own records.
+Trajectories are impractical to keep for cron-driven jobs; the check must be
+LLM-free because it runs next to the scheduler, not next to the model. The
+receipt checker therefore complements trajectory-level detection rather than
+competing with it — it closes the scheduler-to-artifact gap that
+trajectory stream does not reach. We do not claim detection tooling is
+absent from the field; we claim this layer and this evidence unit are not
+what those systems consume.
 
 ## Honest limits
 
@@ -70,6 +108,10 @@ default; traces in `results/` record the exact model and parameters used.
   harness controls. That is the point (a cheap state check beats a
   self-report), but it means the verifier column is a demonstration, not a
   benchmark score.
+- The receipt checker's grid result (8/8 caught, 0 false alarms) rests on the
+  one false-success class this grid produced (empty-success), one task shape,
+  one unnamed model. S2/S3 exist for classes the grid did not produce and are
+  unmeasured here.
 - The grid's subject model is deliberately unnamed — nowhere in the repo,
   traces included. Rerun the grid against any OpenAI-compatible chat model
   to test your own.
