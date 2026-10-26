@@ -1,4 +1,5 @@
 """Tests for the receipt-only false-success checker (scripts/receipt_check.py)."""
+import json
 import sys
 from pathlib import Path
 
@@ -83,3 +84,38 @@ def test_boundary_suite_alignment():
         if r["label"] in ("legit-success", "honest-report"):
             v = check(r)["verdict"]
             assert v == ("unknown" if r["self_status"] == "unparseable" else "clean"), r["case"]
+
+
+def test_model_b_file_counts_and_denominators():
+    # 40 attempts: 34 valid receipts, 6 harness errors that must never
+    # enter the detection / false-alarm denominators
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    rows = [json.loads(l) for l in
+            (root / "results" / "inject_results_b.jsonl").read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    valid = [r for r in rows if not r.get("harness_error")]
+    errs = [r for r in rows if r.get("harness_error")]
+    assert (len(rows), len(valid), len(errs)) == (40, 34, 6)
+    assert {r.get("model") for r in rows} == {"undisclosed"}
+    text = evaluate(rows)
+    assert "receipts: 34 (harness errors excluded)" in text
+    assert "false-success receipts: 7" in text
+    assert "caught (flagged):        7" in text
+    assert "false alarms:            0" in text
+    assert "detection rate: 100%" in text
+    # rule version is tracked with every result
+    assert "rule set: v2" in text and check(valid[0])["rules_version"] == "2"
+
+
+def test_model_a_eval_reproducible():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    rows = [json.loads(l) for l in
+            (root / "results" / "inject_results.jsonl").read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    text = evaluate(rows)
+    assert "receipts: 40 (harness errors excluded)" in text
+    assert "caught (flagged):        8" in text
+    assert "false alarms:            0" in text
+    assert "detection rate: 100%" in text
