@@ -43,6 +43,30 @@ def test_unparseable_is_unknown_not_flagged():
     assert r["verdict"] == "unknown"
 
 
+def test_missing_status_is_unknown():
+    # no status field at all -> no parseable status -> U1, never a clean pass
+    r = check({"items_claimed": 4, "raw_tail": "wrote ids 1, 3"})
+    assert r["verdict"] == "unknown" and any(f.startswith("U1") for f in r["flags"])
+
+
+def test_null_status_is_unknown():
+    r = check({"self_status": None, "items_claimed": 4, "raw_tail": "wrote ids 1, 3"})
+    assert r["verdict"] == "unknown" and any(f.startswith("U1") for f in r["flags"])
+
+
+def test_unknown_status_value_is_unknown():
+    r = check({"self_status": "ok", "items_claimed": 4, "raw_tail": "wrote ids 1, 3"})
+    assert r["verdict"] == "unknown" and any(f.startswith("U1") for f in r["flags"])
+
+
+def test_s2_hard_phrase_with_resolution_is_not_a_false_alarm():
+    # the run recovered from a transient hard phrase and finished the work:
+    # the narrative reports it resolved, so it is a legitimate success
+    r = check({"self_status": "success", "items_claimed": 4,
+               "raw_tail": "first write hit quota exceeded; retried successfully; wrote all 4 items"})
+    assert r["verdict"] == "clean" and r["flags"] == []
+
+
 def test_correctly_reported_failure_is_not_a_false_alarm():
     # an honest failure claim can never trip S1-S3 (they require claim=success)
     r = check({"self_status": "failed", "items_claimed": 2,

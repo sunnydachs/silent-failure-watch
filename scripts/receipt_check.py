@@ -17,9 +17,9 @@ Rules (deterministic, stdlib) -- rule set v2 (resolution-aware):
   S2 narrative-conflict  claim=success and the narrative cites an
                       UNRESOLVED failure: a hard fatal phrase (quota
                       exceeded / retries exhausted / session interrupted /
-                      no data received / ...) unconditionally, or a soft
-                      failure word (429, rate limit, failed, timeout, ...)
-                      with no resolution marker in the same narrative
+                      no data received / ...) or a soft failure word (429,
+                      rate limit, failed, timeout, ...) with no resolution
+                      marker in the same narrative
   S3 count-conflict   claim=success, the narrative says "N of M <unit>
                       failed" with N>0, and no resolution marker
   U1 unparseable      the receipt carries no parseable status at all
@@ -45,7 +45,10 @@ from collections import Counter
 # on legitimate successes that cited handled transient failures).
 RULES_VERSION = "2"
 
-# fatal on sight: the narrative states the failure is NOT resolved
+# the receipt status values this checker can act on; anything else means the
+# receipt carries no parseable status (U1) rather than a success or a failure
+PARSEABLE_STATUSES = ("success", "failed", "partial")
+# fatal failure phrases: still only fatal without a resolution marker
 HARD = re.compile(
     r"no data (was )?received|retr(y|ies) exhausted|no further \w+ will "
     r"succeed|will not resume|session (was )?interrupted|nothing was "
@@ -65,7 +68,7 @@ COUNT_FAILED = re.compile(
 
 def check(receipt: dict) -> dict:
     """Flag one receipt. Pure function over the receipt dict."""
-    status = str(receipt.get("self_status", "")).lower()
+    status = str(receipt.get("self_status") or "").strip().lower()
     tail = receipt.get("raw_tail") or ""
     claimed = receipt.get("items_claimed")
     try:
@@ -73,19 +76,21 @@ def check(receipt: dict) -> dict:
     except (TypeError, ValueError):
         claimed = None
     flags = []
-    if status == "unparseable":
+    if status not in PARSEABLE_STATUSES:
+        # no parseable status at all (missing, null or an unknown value)
         flags.append("U1 unparseable")
     if status == "success":
         if claimed == 0:
             flags.append("S1 empty-success")
         resolved = bool(RESOLVED.search(tail))
-        hard = HARD.search(tail)
-        if hard:
-            flags.append(f"S2 narrative-conflict: {hard.group(0).lower()}")
-        else:
-            soft = sorted({m.group(0).lower() for m in SOFT.finditer(tail)})
-            if soft and not resolved:
-                flags.append("S2 narrative-conflict: " + ", ".join(soft))
+        if not resolved:
+            hard = HARD.search(tail)
+            if hard:
+                flags.append(f"S2 narrative-conflict: {hard.group(0).lower()}")
+            else:
+                soft = sorted({m.group(0).lower() for m in SOFT.finditer(tail)})
+                if soft:
+                    flags.append("S2 narrative-conflict: " + ", ".join(soft))
         m = COUNT_FAILED.search(tail)
         if m and int(m.group(1)) > 0 and not resolved:
             flags.append(f"S3 count-conflict: {m.group(0)}")
